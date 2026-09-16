@@ -5,6 +5,7 @@ const { JWT } = require('google-auth-library');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Permite receber dados em formato JSON nas requisições
 app.use(express.json());
 
 // Função para autenticar e conectar à planilha
@@ -27,6 +28,47 @@ app.get('/', async (req, res) => {
     res.send(`<h1>WhatsApp Multi-Atendimento Rodando! 🚀</h1><p>Conectado à planilha: <strong>${doc.title}</strong></p>`);
   } catch (error) {
     res.status(500).send(`<h1>Erro ao conectar com o Google Sheets</h1><p>${error.message}</p>`);
+  }
+});
+
+// Rota de Login (Valida na aba "Usuarios")
+app.post('/api/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ success: false, message: 'Informe e-mail e senha.' });
+    }
+
+    const doc = await getSpreadsheet();
+    const sheetUsuarios = doc.sheetsByTitle['Usuarios'];
+
+    if (!sheetUsuarios) {
+      return res.status(404).json({ success: false, message: 'Aba "Usuarios" não encontrada na planilha.' });
+    }
+
+    const rows = await sheetUsuarios.getRows();
+
+    // Procura o usuário combinando Email (Coluna C) e Senha_Hash (Coluna D)
+    const user = rows.find(row => 
+      row.get('Email') === email && row.get('Senha_Hash') === password
+    );
+
+    if (user) {
+      return res.json({
+        success: true,
+        id: user.get('ID_Usuario'),
+        name: user.get('Nome'),
+        email: user.get('Email'),
+        perfil: user.get('Perfil'),
+        status: user.get('Status')
+      });
+    } else {
+      return res.status(401).json({ success: false, message: 'E-mail ou senha incorretos.' });
+    }
+  } catch (error) {
+    console.error('Erro no login:', error);
+    res.status(500).json({ success: false, message: error.message });
   }
 });
 
